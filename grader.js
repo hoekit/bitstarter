@@ -1,4 +1,4 @@
-#!/usr/bin/env nod
+#!/usr/bin/env node
 /*
    Automatically grade files for the presence of specified HTML tags/attributes.
    Uses commander.js and cheerio. Teaches command line application development
@@ -22,35 +22,40 @@ References:
  */
 
 var fs = require('fs');
+var rest = require('restler');
 var program = require('commander');
 var cheerio = require('cheerio');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
+
 
 // Filename -> Filename      if file does exists
 // Filename -> process.exit  if file does not exist
 var assertFileExists = function(infile) {
 	var instr = infile.toString();
 	if(!fs.existsSync(instr)) {
-		console.log("%s does not exist. Exiting.", instr);
-		process.exit(1); // http://nodejs.org/api/process.html#process_process_exit_code
+		exitWithMessage( util.format("%s does not exist. Exiting.", instr));
 	}
 	return instr;
 };
+
 
 // HTMLFilename -> Function
 var cheerioHtmlFile = function(htmlfile) {
 	return cheerio.load(fs.readFileSync(htmlfile));
 };
 
+
 // ChecksFileName -> List
 var loadChecks = function(checksfile) {
 	return JSON.parse(fs.readFileSync(checksfile));
 };
 
-// HTMLFileName ChecksFileName -> ListOfBoolean
-// check whether tags listed in ChecksFileName are present in HTMLFilename 
-//    and produce true they are present
+
+// HTMLFileName ChecksFileName -> MapOfBoolean
+// produce a of map {tag:boolean} showing 
+//   whether the tags in file ChecksFileName
+//   are present in html text in file HTMLFilename
 var checkHtmlFile = function(htmlfile, checksfile) {
 	$ = cheerioHtmlFile(htmlfile);
 	var checks = loadChecks(checksfile).sort();
@@ -62,11 +67,40 @@ var checkHtmlFile = function(htmlfile, checksfile) {
 	return out;
 };
 
+
+var assertURLExistsAndChecks = function(inurl, checksFile) {
+	var tmpHtmlFile = "/tmp/gentle-cove-9308.herokuapp.com-index.html";
+	rest.get(inurl).on('complete', function(result) {
+		if (result instanceof Error) {
+			exitWithMessage( util.format("Can't get %s. Exiting.", inurl, 1 ));
+		} else {
+			fs.writeFileSync(tmpHtmlFile, result);
+			console.log("Written to: %s", tmpHtmlFile);
+			runChecks(tmpHtmlFile, checksFile);
+		}
+	});
+}
+
+
+var exitWithMessage = function(msg, rc) {
+	console.log(msg);
+	process.exit(rc); // http://nodejs.org/api/process.html#process_process_exit_code
+}
+
+
+var runChecks = function(htmlfile, checksfile) {
+	var checkJson = checkHtmlFile(htmlfile, checksfile);
+	var outJson = JSON.stringify(checkJson, null, 4);
+	console.log(outJson);
+}
+
+
 var clone = function(fn) {
 	// Workaround for commander.js issue.
 	// http://stackoverflow.com/a/6772648
 	return fn.bind({});
 };
+
 
 if(require.main == module) {
 	program
@@ -74,10 +108,16 @@ if(require.main == module) {
 					clone(assertFileExists), CHECKSFILE_DEFAULT)
 		.option('-f, --file <html_file>', 'Path to index.html', 
 					clone(assertFileExists), HTMLFILE_DEFAULT)
+		.option('-u, --url <URL>', 'URL of an HTML file')
 		.parse(process.argv);
-	var checkJson = checkHtmlFile(program.file, program.checks);
-	var outJson = JSON.stringify(checkJson, null, 4);
-	console.log(outJson);
+
+	if(program.url != undefined) {
+		//console.log("URL defined. Checking url: %s", program.url);
+		assertURLExistsAndChecks(program.url, program.checks);
+	} else {
+		//console.log("URL not defined. Checking file: %s", program.file);
+		runChecks(program.file, program.checks);
+	}
 } else {
 	exports.checkHtmlFile = checkHtmlFile;
 }

@@ -75,7 +75,7 @@ var assertURLExistsAndChecks = function(inurl, checksFile) {
 			exitWithMessage( util.format("Can't get %s. Exiting.", inurl, 1 ));
 		} else {
 			fs.writeFileSync(tmpHtmlFile, result);
-			console.log("Written to: %s", tmpHtmlFile);
+			//console.log("Written to: %s", tmpHtmlFile);
 			runChecks(tmpHtmlFile, checksFile);
 		}
 	});
